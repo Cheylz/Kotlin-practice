@@ -183,4 +183,51 @@ val tasks: List<Task> = _tasks
 - `Shift+Shift`: поиск везде.
 
 
--
+---
+
+## 16. Навигация (Navigation 3)
+
+- Две библиотеки навигации: **Navigation 3** (новая, стабильная с ноября 2025) и **Navigation Compose** (старая, 2.x, много в существующих проектах). Я учу Navigation 3.
+- Идея: **стек экранов это обычный список**. Открыть экран: `backStack.add(ключ)`. Назад: `backStack.removeLastOrNull()`.
+- Каждый экран описывается **ключом** (`NavKey`):
+
+```kotlin
+@Serializable
+data object TaskListKey : NavKey          // экран без данных
+
+@Serializable
+data class TaskDetailKey(val taskId: Int) : NavKey   // данные для экрана лежат в ключе
+```
+
+- `@Serializable` нужен, чтобы стек экранов сохранялся при повороте. Для этого подключаются плагин `kotlin-serialization` и библиотека `kotlinx-serialization-core`.
+- `NavDisplay` показывает текущий экран, `entryProvider` говорит, что рисовать для каждого ключа:
+
+```kotlin
+val backStack = rememberNavBackStack(TaskListKey)
+NavDisplay(
+    backStack = backStack,
+    onBack = { backStack.removeLastOrNull() },
+    entryProvider = entryProvider {
+        entry<TaskListKey> { TaskList(onTaskClick = { id -> backStack.add(TaskDetailKey(id)) }) }
+        entry<TaskDetailKey> { key -> TaskDetail(taskId = key.taskId, onBack = { backStack.removeLastOrNull() }) }
+    }
+)
+```
+
+- Данные на другой экран передаю **через ключ** (лучше `id`, а не индекс или название).
+- Оба экрана вызывают `viewModel()` внутри одной `MainActivity`, поэтому ViewModel у них **общая**.
+
+## 17. Экран сообщает о событии через лямбду
+
+- Экран не открывает другой экран сам. Он получает параметр-лямбду и просто вызывает её: `onTaskClick: (Int) -> Unit`, `onBack: () -> Unit`.
+- Кто решает, что делать, тот и передаёт лямбду (здесь `App()` с `backStack`). Это тот же приём, что `action` в моей функции `applyToAll`.
+- Если у функции появился параметр без значения по умолчанию, **все вызовы нужно обновить**, иначе ошибка `No value passed for parameter`.
+
+## 18. Работа с `id` вместо индекса
+
+- Каждой задаче свой номер: `private var nextId = 1`, при создании `Task(id = nextId++, ...)`.
+- `find { it.id == id }` вернёт задачу или `null`, поэтому тип `Task?`. Компилятор заставляет обработать «задача не найдена».
+- Переключить: найти позицию через `indexOfFirst { it.id == id }` (вернёт `-1`, если нет), проверить `!= -1`, заменить через `copy`.
+- Удалить: `_task.removeAll { it.id == id }`. В лямбде `removeAll` условие проверяется **для каждого элемента**, поэтому нужно сравнивать `it`.
+- `items(list, key = { it.id }) { task -> ... }`: ключ помогает списку не путать строки при удалении.
+
